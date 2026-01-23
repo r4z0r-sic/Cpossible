@@ -23,7 +23,6 @@
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
 
-    // Icons as simple components
     const Icon = ({ name, size = 20, className = "" }) => {
       const ref = useRef(null);
       useEffect(() => {
@@ -210,6 +209,11 @@
       const [entryData, setEntryData] = useState(null);
       const [exitData, setExitData] = useState(null);
       const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+      
+      // IMPORTANT: Ces états sont au niveau App pour persister quand le modal se re-render
+      const [configSelectedTemplate, setConfigSelectedTemplate] = useState('default');
+      const [configExpandedPiece, setConfigExpandedPiece] = useState(null);
+      const [configCreateStep, setConfigCreateStep] = useState(0);
 
       useEffect(() => { try { localStorage.setItem('edl_templates', JSON.stringify(templates)); } catch {} }, [templates]);
       useEffect(() => { try { localStorage.setItem('edl_saved', JSON.stringify(savedEdls)); } catch {} }, [savedEdls]);
@@ -254,11 +258,13 @@
       };
 
       const saveAsTemplate = (name) => {
+        const templateKey = name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') + '_' + Date.now();
         const template = { nom: name, pieces: {}, cles: data.cles.map(({ id, nom, qte }) => ({ id, nom, qte })) };
         Object.entries(data.pieces).forEach(([key, piece]) => {
           template.pieces[key] = { nom: piece.nom, ordre: piece.ordre || 0, etatLieux: piece.etatLieux.map(({ id, nom }) => ({ id, nom })), inventaire: piece.inventaire.map(({ id, nom, qte }) => ({ id, nom, qte })) };
         });
-        setTemplates(prev => ({ ...prev, [name.toLowerCase().replace(/\s+/g, '_')]: template }));
+        setTemplates(prev => ({ ...prev, [templateKey]: template }));
+        setConfigSelectedTemplate(templateKey);
       };
 
       const loadTemplate = (templateKey) => {
@@ -271,6 +277,7 @@
         if (window.confirm(`Supprimer "${templates[templateKey].nom}" ?`)) {
           const newTemplates = { ...templates }; delete newTemplates[templateKey]; setTemplates(newTemplates);
           if (currentTemplate === templateKey) loadTemplate('default');
+          if (configSelectedTemplate === templateKey) setConfigSelectedTemplate('default');
         }
       };
 
@@ -467,22 +474,47 @@
         );
       };
 
-      // Config Modal
+      // Config Modal - Les états sont remontés dans App pour persister
       const ConfigModal = () => {
         const [newTemplateName, setNewTemplateName] = useState('');
-        const [selectedTemplateKey, setSelectedTemplateKey] = useState(currentTemplate);
         const [newPieceName, setNewPieceName] = useState('');
         const [newItemName, setNewItemName] = useState('');
-        const [newItemQte, setNewItemQte] = useState(1);
-        const [expandedConfigPiece, setExpandedConfigPiece] = useState(null);
-        const template = templates[selectedTemplateKey];
+        const [newItemQte, setNewItemQte] = useState('1');
+        // États locaux pour les inputs de quantité (pour pouvoir vider le champ)
+        const [localQtes, setLocalQtes] = useState({});
+        
+        const template = templates[configSelectedTemplate];
+
+        // Fonction pour gérer le champ quantité avec possibilité de vider
+        const handleQteChange = (pieceKey, itemId, value) => {
+          // Permet de vider le champ temporairement
+          const key = `${pieceKey}-${itemId}`;
+          setLocalQtes(prev => ({ ...prev, [key]: value }));
+        };
+
+        const handleQteBlur = (pieceKey, itemId, value) => {
+          const key = `${pieceKey}-${itemId}`;
+          const numValue = parseInt(value) || 0;
+          updateTemplateItem(configSelectedTemplate, pieceKey, 'inventaire', itemId, 'qte', numValue);
+          // Nettoyer l'état local
+          setLocalQtes(prev => {
+            const newState = { ...prev };
+            delete newState[key];
+            return newState;
+          });
+        };
+
+        const getQteValue = (pieceKey, itemId, originalValue) => {
+          const key = `${pieceKey}-${itemId}`;
+          return localQtes.hasOwnProperty(key) ? localQtes[key] : originalValue;
+        };
 
         return (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
             <div className="bg-white w-full max-w-lg max-h-[90vh] rounded-t-2xl sm:rounded-2xl overflow-hidden flex flex-col">
               <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white p-4 flex items-center justify-between">
                 <h2 className="font-bold text-lg">⚙️ Configuration</h2>
-                <button onClick={() => setShowConfig(false)} className="p-1">✕</button>
+                <button onClick={() => { setShowConfig(false); setConfigCreateStep(0); }} className="p-2 text-xl">✕</button>
               </div>
               <div className="flex border-b text-sm">
                 {['appartements', 'pieces', 'inventaire', 'export'].map(tab => (
@@ -490,86 +522,276 @@
                 ))}
               </div>
               <div className="flex-1 overflow-auto p-4">
+                
+                {/* ONGLET APPARTEMENTS */}
                 {configTab === 'appartements' && (
                   <div className="space-y-4">
-                    <div className="bg-gray-50 p-3 rounded-lg">
-                      <label className="block text-sm font-medium mb-2">Créer un modèle</label>
-                      <div className="flex gap-2">
-                        <input type="text" value={newTemplateName} onChange={(e) => setNewTemplateName(e.target.value)} placeholder="Nom (ex: 33C Cellerier)" className="flex-1 p-2 border rounded-lg text-sm" />
-                        <button onClick={() => { if (newTemplateName.trim()) { saveAsTemplate(newTemplateName.trim()); setNewTemplateName(''); } }} className="px-4 py-2 bg-purple-600 text-white rounded-lg">+</button>
-                      </div>
+                    {/* Instructions */}
+                    <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg text-sm">
+                      <p className="font-medium text-blue-800 mb-1">💡 Comment utiliser les modèles :</p>
+                      <ol className="text-blue-700 list-decimal list-inside space-y-1 text-xs">
+                        <li><strong>Créez</strong> un modèle pour chaque appartement</li>
+                        <li><strong>Personnalisez</strong> les pièces et l'inventaire (onglets suivants)</li>
+                        <li><strong>Chargez</strong> le bon modèle avant chaque état des lieux</li>
+                      </ol>
                     </div>
-                    <div className="space-y-2">
-                      {Object.entries(templates).map(([key, tpl]) => (
-                        <div key={key} className={`p-3 rounded-lg border-2 ${selectedTemplateKey === key ? 'border-purple-500 bg-purple-50' : 'border-gray-200'}`}>
-                          <div className="flex items-center justify-between">
-                            <button onClick={() => setSelectedTemplateKey(key)} className="flex-1 text-left font-medium">{tpl.nom}</button>
-                            {key !== 'default' && <button onClick={() => deleteTemplate(key)} className="text-red-500 text-sm">🗑</button>}
+
+                    {configCreateStep === 0 ? (
+                      <>
+                        {/* Bouton création */}
+                        <button 
+                          onClick={() => setConfigCreateStep(1)} 
+                          className="w-full py-3 bg-gradient-to-r from-purple-500 to-indigo-500 text-white rounded-xl font-medium text-lg shadow-md"
+                        >
+                          ➕ Créer un nouveau modèle
+                        </button>
+
+                        {/* Liste des modèles */}
+                        <div>
+                          <label className="text-sm font-medium text-gray-600 mb-2 block">Vos modèles ({Object.keys(templates).length})</label>
+                          <div className="space-y-2">
+                            {Object.entries(templates).map(([key, tpl]) => (
+                              <div key={key} className={`p-3 rounded-xl border-2 transition-all ${configSelectedTemplate === key ? 'border-purple-500 bg-purple-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                                <div className="flex items-center justify-between">
+                                  <button onClick={() => setConfigSelectedTemplate(key)} className="flex-1 text-left">
+                                    <span className="font-medium">{tpl.nom}</span>
+                                    {key === 'default' && <span className="ml-2 text-xs text-gray-400">(défaut)</span>}
+                                    {currentTemplate === key && <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">actif</span>}
+                                  </button>
+                                  {key !== 'default' && (
+                                    <button onClick={() => deleteTemplate(key)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg">🗑</button>
+                                  )}
+                                </div>
+                                {configSelectedTemplate === key && (
+                                  <div className="mt-3 pt-3 border-t border-purple-200">
+                                    <p className="text-xs text-gray-500 mb-2">{Object.keys(tpl.pieces).length} pièces configurées</p>
+                                    <div className="flex gap-2">
+                                      <button 
+                                        onClick={() => { loadTemplate(key); setShowConfig(false); }} 
+                                        className="flex-1 py-2 bg-purple-600 text-white rounded-lg font-medium"
+                                      >
+                                        ✓ Utiliser ce modèle
+                                      </button>
+                                      <button 
+                                        onClick={() => setConfigTab('pieces')} 
+                                        className="px-4 py-2 bg-gray-200 rounded-lg"
+                                      >
+                                        ✏️
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
                           </div>
-                          {selectedTemplateKey === key && <button onClick={() => { loadTemplate(key); setShowConfig(false); }} className="mt-2 w-full py-2 bg-purple-600 text-white rounded-lg text-sm">Charger</button>}
                         </div>
-                      ))}
-                    </div>
+                      </>
+                    ) : (
+                      /* Formulaire création */
+                      <div className="bg-gradient-to-br from-purple-50 to-indigo-50 border-2 border-purple-200 p-4 rounded-xl">
+                        <h3 className="font-bold text-purple-800 mb-3 text-lg">Nouveau modèle</h3>
+                        <input 
+                          type="text" 
+                          value={newTemplateName} 
+                          onChange={(e) => setNewTemplateName(e.target.value)} 
+                          placeholder="Nom de l'appartement (ex: 33C Cellerier)" 
+                          className="w-full p-3 border-2 border-purple-300 rounded-lg text-lg mb-3"
+                          autoFocus
+                        />
+                        <p className="text-xs text-purple-600 mb-4">
+                          💡 Le modèle sera créé avec la configuration de base. Vous pourrez ensuite ajouter/supprimer des pièces et ajuster l'inventaire.
+                        </p>
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => { setConfigCreateStep(0); setNewTemplateName(''); }} 
+                            className="flex-1 py-3 bg-gray-200 rounded-lg font-medium"
+                          >
+                            Annuler
+                          </button>
+                          <button 
+                            onClick={() => { 
+                              if (newTemplateName.trim()) { 
+                                saveAsTemplate(newTemplateName.trim()); 
+                                setNewTemplateName(''); 
+                                setConfigCreateStep(0);
+                                alert('✅ Modèle "' + newTemplateName.trim() + '" créé avec succès !\n\nAllez dans l\'onglet "Pièces" ou "Inventaire" pour le personnaliser.');
+                              } 
+                            }} 
+                            disabled={!newTemplateName.trim()}
+                            className="flex-1 py-3 bg-purple-600 text-white rounded-lg font-medium disabled:opacity-50"
+                          >
+                            ✓ Créer
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
+
+                {/* ONGLET PIECES */}
                 {configTab === 'pieces' && (
                   <div className="space-y-4">
+                    <div className="bg-yellow-50 border border-yellow-200 p-2 rounded-lg text-sm flex items-center gap-2">
+                      <span>📁</span>
+                      <span>Modèle : <strong>{template.nom}</strong></span>
+                    </div>
+                    
                     <div className="bg-blue-50 p-3 rounded-lg">
-                      <label className="block text-sm font-medium mb-2">Ajouter une pièce</label>
+                      <label className="block text-sm font-medium mb-2">➕ Ajouter une pièce</label>
                       <div className="flex gap-2">
-                        <input type="text" value={newPieceName} onChange={(e) => setNewPieceName(e.target.value)} placeholder="Nom (ex: Chambre 2)" className="flex-1 p-2 border rounded-lg text-sm" />
-                        <button onClick={() => { if (newPieceName.trim()) { addPieceToTemplate(selectedTemplateKey, newPieceName.trim()); setNewPieceName(''); } }} className="px-4 py-2 bg-blue-600 text-white rounded-lg">+</button>
+                        <input 
+                          type="text" 
+                          value={newPieceName} 
+                          onChange={(e) => setNewPieceName(e.target.value)} 
+                          placeholder="Nom (ex: Chambre 2, Cave...)" 
+                          className="flex-1 p-3 border rounded-lg" 
+                        />
+                        <button 
+                          onClick={() => { if (newPieceName.trim()) { addPieceToTemplate(configSelectedTemplate, newPieceName.trim()); setNewPieceName(''); } }} 
+                          className="px-5 py-3 bg-blue-600 text-white rounded-lg font-bold text-lg"
+                        >
+                          +
+                        </button>
                       </div>
                     </div>
+
                     <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-600">Pièces du modèle :</label>
                       {Object.entries(template.pieces).sort((a, b) => (a[1].ordre || 0) - (b[1].ordre || 0)).map(([pieceKey, piece]) => (
-                        <div key={pieceKey} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                          <span>{piece.nom}</span>
-                          <button onClick={() => removePieceFromTemplate(selectedTemplateKey, pieceKey)} className="text-red-500">🗑</button>
+                        <div key={pieceKey} className="flex items-center justify-between p-3 bg-white border rounded-lg">
+                          <span className="font-medium">{piece.nom}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-400">{piece.etatLieux.length} él. • {piece.inventaire.length} inv.</span>
+                            <button onClick={() => removePieceFromTemplate(configSelectedTemplate, pieceKey)} className="p-2 text-red-500 hover:bg-red-50 rounded">🗑</button>
+                          </div>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
+
+                {/* ONGLET INVENTAIRE */}
                 {configTab === 'inventaire' && (
                   <div className="space-y-3">
-                    <p className="text-sm text-gray-600 bg-yellow-50 p-2 rounded">Modèle: <strong>{template.nom}</strong></p>
+                    <div className="bg-yellow-50 border border-yellow-200 p-2 rounded-lg text-sm flex items-center gap-2">
+                      <span>📁</span>
+                      <span>Modèle : <strong>{template.nom}</strong></span>
+                    </div>
+                    <p className="text-xs text-gray-500">👆 Cliquez sur une pièce pour modifier son contenu. Les menus restent ouverts pendant vos modifications.</p>
+                    
                     {Object.entries(template.pieces).sort((a, b) => (a[1].ordre || 0) - (b[1].ordre || 0)).map(([pieceKey, piece]) => (
-                      <div key={pieceKey} className="border rounded-lg overflow-hidden">
-                        <button onClick={() => setExpandedConfigPiece(expandedConfigPiece === pieceKey ? null : pieceKey)} className="w-full flex items-center justify-between p-3 bg-gray-50 text-sm font-medium">
-                          {piece.nom}
-                          <span>{expandedConfigPiece === pieceKey ? '▲' : '▼'}</span>
+                      <div key={pieceKey} className="border rounded-lg overflow-hidden bg-white">
+                        <button 
+                          onClick={() => setConfigExpandedPiece(configExpandedPiece === pieceKey ? null : pieceKey)} 
+                          className="w-full flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100"
+                        >
+                          <span className="font-medium">{piece.nom}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">{piece.etatLieux.length}</span>
+                            <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">{piece.inventaire.length}</span>
+                            <span className="text-lg">{configExpandedPiece === pieceKey ? '▲' : '▼'}</span>
+                          </div>
                         </button>
-                        {expandedConfigPiece === pieceKey && (
-                          <div className="p-3 space-y-3 text-sm">
-                            <div>
-                              <h5 className="font-semibold text-blue-700 mb-1">État des lieux</h5>
-                              {piece.etatLieux.map(item => (
-                                <div key={item.id} className="flex items-center justify-between py-1">
-                                  <span>{item.nom}</span>
-                                  <button onClick={() => removeTemplateItem(selectedTemplateKey, pieceKey, 'etatLieux', item.id)} className="text-red-500 text-xs">✕</button>
-                                </div>
-                              ))}
-                              <div className="flex gap-2 mt-2">
-                                <input type="text" placeholder="Ajouter..." value={newItemName} onChange={(e) => setNewItemName(e.target.value)} className="flex-1 p-1 border rounded text-sm" />
-                                <button onClick={() => { if (newItemName.trim()) { addTemplateItem(selectedTemplateKey, pieceKey, 'etatLieux', { id: `c_${Date.now()}`, nom: newItemName.trim() }); setNewItemName(''); } }} className="px-2 bg-blue-500 text-white rounded">+</button>
+                        
+                        {configExpandedPiece === pieceKey && (
+                          <div className="p-3 space-y-4 bg-gray-50">
+                            {/* État des lieux */}
+                            <div className="bg-white p-3 rounded-lg border">
+                              <h5 className="font-semibold text-blue-700 mb-2 text-sm">🏠 Éléments état des lieux</h5>
+                              <div className="space-y-1 mb-3">
+                                {piece.etatLieux.map(item => (
+                                  <div key={item.id} className="flex items-center justify-between py-2 px-2 bg-blue-50 rounded">
+                                    <span className="text-sm">{item.nom}</span>
+                                    <button 
+                                      onClick={() => removeTemplateItem(configSelectedTemplate, pieceKey, 'etatLieux', item.id)} 
+                                      className="p-1.5 text-red-500 hover:bg-red-100 rounded text-lg"
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
+                                ))}
+                                {piece.etatLieux.length === 0 && <p className="text-xs text-gray-400 italic">Aucun élément</p>}
+                              </div>
+                              <div className="flex gap-2">
+                                <input 
+                                  type="text" 
+                                  placeholder="Nouvel élément..." 
+                                  value={newItemName} 
+                                  onChange={(e) => setNewItemName(e.target.value)} 
+                                  className="flex-1 p-2 border rounded" 
+                                />
+                                <button 
+                                  onClick={() => { 
+                                    if (newItemName.trim()) { 
+                                      addTemplateItem(configSelectedTemplate, pieceKey, 'etatLieux', { id: `c_${Date.now()}`, nom: newItemName.trim() }); 
+                                      setNewItemName(''); 
+                                    } 
+                                  }} 
+                                  className="px-4 py-2 bg-blue-500 text-white rounded font-bold"
+                                >
+                                  +
+                                </button>
                               </div>
                             </div>
-                            <div>
-                              <h5 className="font-semibold text-green-700 mb-1">Inventaire</h5>
-                              {piece.inventaire.map(item => (
-                                <div key={item.id} className="flex items-center justify-between py-1">
-                                  <span>{item.nom}</span>
-                                  <div className="flex items-center gap-2">
-                                    <input type="number" min="0" value={item.qte} onChange={(e) => updateTemplateItem(selectedTemplateKey, pieceKey, 'inventaire', item.id, 'qte', parseInt(e.target.value) || 0)} className="w-12 text-center p-1 border rounded text-sm" />
-                                    <button onClick={() => removeTemplateItem(selectedTemplateKey, pieceKey, 'inventaire', item.id)} className="text-red-500 text-xs">✕</button>
+
+                            {/* Inventaire */}
+                            <div className="bg-white p-3 rounded-lg border">
+                              <h5 className="font-semibold text-green-700 mb-2 text-sm">📋 Éléments inventaire</h5>
+                              <div className="space-y-1 mb-3">
+                                {piece.inventaire.map(item => (
+                                  <div key={item.id} className="flex items-center justify-between py-2 px-2 bg-green-50 rounded">
+                                    <span className="text-sm flex-1">{item.nom}</span>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs text-gray-500">Qté:</span>
+                                      <input 
+                                        type="text"
+                                        inputMode="numeric"
+                                        value={getQteValue(pieceKey, item.id, item.qte)}
+                                        onChange={(e) => handleQteChange(pieceKey, item.id, e.target.value.replace(/[^0-9]/g, ''))}
+                                        onBlur={(e) => handleQteBlur(pieceKey, item.id, e.target.value)}
+                                        onFocus={(e) => e.target.select()}
+                                        className="w-16 text-center p-2 border rounded text-sm" 
+                                      />
+                                      <button 
+                                        onClick={() => removeTemplateItem(configSelectedTemplate, pieceKey, 'inventaire', item.id)} 
+                                        className="p-1.5 text-red-500 hover:bg-red-100 rounded text-lg"
+                                      >
+                                        ✕
+                                      </button>
+                                    </div>
                                   </div>
-                                </div>
-                              ))}
-                              <div className="flex gap-2 mt-2">
-                                <input type="text" placeholder="Ajouter..." value={newItemName} onChange={(e) => setNewItemName(e.target.value)} className="flex-1 p-1 border rounded text-sm" />
-                                <input type="number" min="1" value={newItemQte} onChange={(e) => setNewItemQte(parseInt(e.target.value) || 1)} className="w-12 text-center p-1 border rounded text-sm" />
-                                <button onClick={() => { if (newItemName.trim()) { addTemplateItem(selectedTemplateKey, pieceKey, 'inventaire', { id: `c_${Date.now()}`, nom: newItemName.trim(), qte: newItemQte }); setNewItemName(''); setNewItemQte(1); } }} className="px-2 bg-green-500 text-white rounded">+</button>
+                                ))}
+                                {piece.inventaire.length === 0 && <p className="text-xs text-gray-400 italic">Aucun élément</p>}
+                              </div>
+                              <div className="flex gap-2">
+                                <input 
+                                  type="text" 
+                                  placeholder="Nouvel élément..." 
+                                  value={newItemName} 
+                                  onChange={(e) => setNewItemName(e.target.value)} 
+                                  className="flex-1 p-2 border rounded" 
+                                />
+                                <input 
+                                  type="text"
+                                  inputMode="numeric"
+                                  value={newItemQte}
+                                  onChange={(e) => setNewItemQte(e.target.value.replace(/[^0-9]/g, '') || '')}
+                                  onFocus={(e) => e.target.select()}
+                                  placeholder="Qté"
+                                  className="w-16 text-center p-2 border rounded" 
+                                />
+                                <button 
+                                  onClick={() => { 
+                                    if (newItemName.trim()) { 
+                                      addTemplateItem(configSelectedTemplate, pieceKey, 'inventaire', { id: `c_${Date.now()}`, nom: newItemName.trim(), qte: parseInt(newItemQte) || 1 }); 
+                                      setNewItemName(''); 
+                                      setNewItemQte('1'); 
+                                    } 
+                                  }} 
+                                  className="px-4 py-2 bg-green-500 text-white rounded font-bold"
+                                >
+                                  +
+                                </button>
                               </div>
                             </div>
                           </div>
@@ -578,16 +800,27 @@
                     ))}
                   </div>
                 )}
+
+                {/* ONGLET EXPORT */}
                 {configTab === 'export' && (
                   <div className="space-y-4">
-                    <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-                      <h3 className="font-medium">Export / Import</h3>
-                      <button onClick={exportTemplates} className="w-full py-2 bg-purple-600 text-white rounded-lg text-sm">📤 Exporter les modèles</button>
-                      <label className="w-full py-2 bg-green-600 text-white rounded-lg text-sm flex items-center justify-center cursor-pointer">
+                    <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg text-sm">
+                      <p className="font-medium text-blue-800 mb-1">💾 Sauvegarde et transfert</p>
+                      <p className="text-blue-700 text-xs">Exportez vos modèles pour les sauvegarder ou les transférer sur un autre appareil.</p>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      <button onClick={exportTemplates} className="w-full py-3 bg-purple-600 text-white rounded-lg font-medium">
+                        📤 Exporter tous les modèles
+                      </button>
+                      <label className="w-full py-3 bg-green-600 text-white rounded-lg font-medium flex items-center justify-center cursor-pointer">
                         📥 Importer des modèles
                         <input type="file" accept=".json" onChange={importTemplates} className="hidden" />
                       </label>
-                      <button onClick={exportJSON} className="w-full py-2 bg-blue-600 text-white rounded-lg text-sm">💾 Exporter l'état actuel (JSON)</button>
+                      <hr className="my-2 border-gray-200" />
+                      <button onClick={exportJSON} className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium">
+                        💾 Exporter l'état des lieux actuel
+                      </button>
                     </div>
                   </div>
                 )}
@@ -854,7 +1087,7 @@
                         <span className="font-medium">{cle.nom}</span>
                         <div className="flex items-center gap-2">
                           <span className="text-xs">Qté:</span>
-                          <input type="number" min="0" value={cle.qte} onChange={(e) => updateCle(cle.id, 'qte', parseInt(e.target.value) || 0)} className="w-12 text-center p-1 border rounded text-sm" />
+                          <input type="number" min="0" value={cle.qte} onChange={(e) => updateCle(cle.id, 'qte', parseInt(e.target.value) || 0)} className="w-12 text-center text-sm p-1 border rounded" />
                         </div>
                       </div>
                       <div className="flex gap-2 mb-2">
