@@ -77,6 +77,43 @@ let __msalInteractive = false;
 async function getAccessToken() {
   await __msalReady;
 
+  if (__msalInteractive) throw new Error("interaction_in_progress");
+
+  const scopes = loginRequest.scopes; // ["User.Read", "Files.ReadWrite"]
+
+  let account = msalInstance.getAllAccounts()[0];
+  if (!account) {
+    try {
+      __msalInteractive = true;
+      const loginRes = await msalInstance.loginPopup({ scopes });
+      account = loginRes.account || msalInstance.getAllAccounts()[0];
+    } finally {
+      __msalInteractive = false;
+    }
+  }
+
+  try {
+    const res = await msalInstance.acquireTokenSilent({ scopes, account });
+    return res.accessToken; // ✅ PAS idToken
+  } catch (e) {
+    const code = e?.errorCode || e?.code || "";
+    if (["interaction_required", "login_required", "consent_required"].includes(code)) {
+      try {
+        __msalInteractive = true;
+        const res = await msalInstance.acquireTokenPopup({ scopes });
+        return res.accessToken; // ✅
+      } finally {
+        __msalInteractive = false;
+      }
+    }
+    throw e;
+  }
+}
+
+
+async function getAccessToken() {
+  await __msalReady;
+
   // Empêche double popup
   if (__msalInteractive) {
     throw new Error("interaction_in_progress");
@@ -139,13 +176,21 @@ const BASE_FOLDER = "Maintenance";
 
 async function graphJson(path) {
   const token = await getAccessToken();
+
+  // Vérif rapide : un access token JWT a 2 points
+  if (!token || typeof token !== "string" || token.split(".").length < 3) {
+    throw new Error("Token invalide (pas un JWT). Vérifie getAccessToken()");
+  }
+
   const res = await fetch(`https://graph.microsoft.com/v1.0${path}`, {
     headers: { Authorization: `Bearer ${token}` }
   });
+
   const txt = await res.text();
   if (!res.ok) throw new Error(`Graph ${res.status}: ${txt}`);
   return txt ? JSON.parse(txt) : {};
 }
+
 
 async function getDriveItemIdByPath(path) {
   // Exemple path: "Maintenance"
