@@ -73,10 +73,30 @@ const msalInstance = new msal.PublicClientApplication(msalConfig);
 const __msalReady = msalInstance.initialize();
 let __msalInteractive = false;
 
+let __waitInteraction = null;
+
+function waitForInteractionToFinish() {
+  if (!__waitInteraction) {
+    __waitInteraction = new Promise((resolve) => {
+      const t = setInterval(() => {
+        if (!__msalInteractive) {
+          clearInterval(t);
+          __waitInteraction = null;
+          resolve();
+        }
+      }, 150);
+    });
+  }
+  return __waitInteraction;
+}
+
 async function getAccessToken() {
   await __msalReady;
 
-  if (__msalInteractive) throw new Error("interaction_in_progress");
+  if (__msalInteractive) {
+  await waitForInteractionToFinish();
+}
+
 
   const scopes = loginRequest.scopes;
 
@@ -452,7 +472,6 @@ async function downloadOneDriveText(filePath) {
 
       const refreshOneDriveFolders = async () => {
         if (odLoading) return;
-  setOdLoading(true);
   try {
     // 1) résoudre Maintenance -> ID (1 fois)
     let id = maintenanceId;
