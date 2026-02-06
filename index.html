@@ -534,7 +534,7 @@
                           <div className="flex flex-wrap gap-1 mb-2">
                             {ETAT_OPTIONS.map(opt => <EtatButton key={opt} value={opt} selected={item.etat === opt} onClick={(v) => updateInventaire(pieceKey, item.id, 'etat', v)} />)}
                           </div>
-                          <input type="text" placeholder="Commentaire..." value={item.commentaire} onChange={(e) => updateInventaire(pieceKey, item.id, 'commentaire', e.target.value)} className="w-full text-sm p-2 border rounded-lg mb-2" />
+                          <input type="text" placeholder="Commentaire..." defaultValue={item.commentaire} onBlur={(e) => updateInventaire(pieceKey, item.id, 'commentaire', e.target.value)}  className="w-full text-sm p-2 border rounded-lg mb-2" />
                           <PhotoGallery photos={item.photos} onRemove={(photoId) => updateInventaire(pieceKey, item.id, 'photos', item.photos.filter(p => p.id !== photoId))} inputId={`p-i-${pieceKey}-${item.id}`} onAddPhoto={(e) => handlePhotoCapture(e, (photos) => updateInventaire(pieceKey, item.id, 'photos', photos), item.photos)} />
                         </div>
                       ))}
