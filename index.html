@@ -11,6 +11,7 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@latest/lib/msal-browser.min.js"></script>
   <style>
     * { -webkit-tap-highlight-color: transparent; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
@@ -45,23 +46,147 @@
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
 
-    /* ===== utils nom de fichier ===== */
-    const slug = (s) =>
-      (s || '')
-        .toString()
-        .trim()
-        .replace(/\s+/g, '_')
-        .replace(/[^\w\-]+/g, '')
-        .replace(/_+/g, '_');
-
-    const buildEdlName = (info) => {
-      const adresse   = slug(info.adresse || 'Adresse');
-      const locataire = slug(info.locataire || 'Locataire');
-      const date      = info.date || new Date().toISOString().slice(0, 10);
-      const type      = info.type === 'entree' ? 'ENTREE' : 'SORTIE';
+    /* ===================== Microsoft login (MSAL) ===================== */
+    /* Renseigne ces 2 valeurs */
+    const MS_TENANT_ID = "eb304221-7dc4-4c7f-a5e5-31d6ca8f13fa";   // ex: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" ou "common"
+    const MS_CLIENT_ID = "77bd8b26-52dd-4cfb-adbd-61b003da8157";   // ex: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
     
-      return `${adresse}-${locataire}-${date}-${type}`;
-    };
+    const msalConfig = {
+    auth: {
+      authority: `https://login.microsoftonline.com/${MS_TENANT_ID}`,
+      clientId: MS_CLIENT_ID,
+      redirectUri: window.location.origin + window.location.pathname,
+    },
+  cache: {
+    cacheLocation: "localStorage",
+    storeAuthStateInCookie: false,
+  },
+};
+
+const loginRequest = {
+  scopes: ["User.Read", "Files.ReadWrite"], // Pas besoin d'admin
+};
+
+const msalInstance = new msal.PublicClientApplication(msalConfig);
+
+async function getAccessToken() {
+  const accounts = msalInstance.getAllAccounts();
+  if (!accounts.length) {
+    await msalInstance.loginPopup(loginRequest);
+  }
+  const account = msalInstance.getAllAccounts()[0];
+  const res = await msalInstance.acquireTokenSilent({ ...loginRequest, account });
+  return res.accessToken;
+}
+
+/* ===================== Utils nommage / slug ===================== */
+const slug = (s) =>
+  (s || "")
+    .toString()
+    .trim()
+    .normalize("NFD")              // enlève accents
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, "_")
+    .replace(/[^\w\-]+/g, "")
+    .replace(/_+/g, "_");
+
+const buildEdlName = (info) => {
+  const adresse   = slug(info.adresse || "Adresse");
+  const locataire = slug(info.locataire || "Locataire");
+  const date      = info.date || new Date().toISOString().slice(0, 10);
+  const type      = info.type === "entree" ? "ENTREE" : "SORTIE";
+  return `${adresse}-${locataire}-${date}-${type}`;
+};
+
+/* ===================== OneDrive helpers (dossier = Maintenance) ===================== */
+const BASE_FOLDER = "Maintenance";
+
+async function listOneDriveChildren(path) {
+  const token = await getAccessToken();
+  const res = await fetch(
+    `https://graph.microsoft.com/v1.0/me/drive/root:/${encodeURI(path)}:/children`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (!res.ok) throw new Error("Liste OneDrive échouée");
+  const data = await res.json();
+  return data.value || [];
+}
+
+async function listOneDriveFolders(path) {
+  const items = await listOneDriveChildren(path);
+  return items.filter((i) => i.folder); // only folders
+}
+
+async function createOneDriveFolder(parentPath, folderName) {
+  const token = await getAccessToken();
+  const res = await fetch(
+    `https://graph.microsoft.com/v1.0/me/drive/root:/${encodeURI(parentPath)}:/children`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: folderName,
+        folder: {},
+        "@microsoft.graph.conflictBehavior": "fail",
+      }),
+    }
+  );
+  if (!res.ok) throw new Error("Création dossier échouée");
+  return res.json();
+}
+
+async function ensureFolderPath(path) {
+  // Crée les dossiers du chemin progressivement (ex: Maintenance/A/B)
+  const parts = path.split("/").filter(Boolean);
+  let cur = parts[0]; // "Maintenance" doit déjà exister (dans ton cas oui)
+  for (let i = 1; i < parts.length; i++) {
+    const next = parts[i];
+    const children = await listOneDriveChildren(cur);
+    const exists = children.find((x) => x.folder && x.name === next);
+    if (!exists) {
+      await createOneDriveFolder(cur, next);
+    }
+    cur = `${cur}/${next}`;
+  }
+  return cur;
+}
+
+async function uploadTextToOneDrive(path, filename, textContent) {
+  const token = await getAccessToken();
+  const fullPath = `${path}/${filename}`.replace(/\/+/g, "/");
+
+  const res = await fetch(
+    `https://graph.microsoft.com/v1.0/me/drive/root:/${encodeURI(fullPath)}:/content`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: textContent,
+    }
+  );
+
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error("Upload échoué: " + t);
+  }
+  return res.json();
+}
+
+async function downloadOneDriveText(filePath) {
+  const token = await getAccessToken();
+  const res = await fetch(
+    `https://graph.microsoft.com/v1.0/me/drive/root:/${encodeURI(filePath)}:/content`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (!res.ok) throw new Error("Download échoué");
+  return res.text();
+}
+
 
     const Icon = ({ name, size = 20, className = "" }) => {
       const ref = useRef(null);
@@ -225,6 +350,13 @@
     const deepClone = (obj) => JSON.parse(JSON.stringify(obj));
 
     function App() {
+      const [odFolders, setOdFolders] = useState([]);   // sous-dossiers de Maintenance/
+      const [odSelected, setOdSelected] = useState(""); // sous-dossier choisi
+      const [odLoading, setOdLoading] = useState(false);
+
+      // Liste des JSON trouvés dans le chemin choisi
+      const [odFiles, setOdFiles] = useState([]);
+
       const [templates, setTemplates] = useState(() => {
         try { const saved = localStorage.getItem('edl_templates'); return saved ? JSON.parse(saved) : { 'default': defaultTemplate }; }
         catch { return { 'default': defaultTemplate }; }
@@ -253,6 +385,90 @@
 
       useEffect(() => { try { localStorage.setItem('edl_templates', JSON.stringify(templates)); } catch {} }, [templates]);
       useEffect(() => { try { localStorage.setItem('edl_saved', JSON.stringify(savedEdls)); } catch {} }, [savedEdls]);
+
+      const refreshOneDriveFolders = async () => {
+  setOdLoading(true);
+  try {
+    const folders = await listOneDriveFolders(BASE_FOLDER); // "Maintenance"
+    setOdFolders(folders);
+    if (!odSelected && folders.length) setOdSelected(folders[0].name);
+  } catch (e) {
+    console.error(e);
+    alert('Impossible de lister "Maintenance". Vérifie que le dossier existe dans OneDrive (Mes fichiers).');
+  } finally {
+    setOdLoading(false);
+  }
+};
+
+const saveEdlToOneDrive = async () => {
+  if (!odSelected) {
+    alert("Choisis d'abord un sous-dossier de Maintenance (bouton 🔄).");
+    return;
+  }
+
+  const label = buildEdlName(data.info);
+  const adresseFolder = slug(data.info.adresse || "Adresse");
+
+  // Maintenance/<SousDossier>/<Adresse>/
+  const folderPath = `${BASE_FOLDER}/${odSelected}/${adresseFolder}`;
+
+  try {
+    // crée Maintenance/<SousDossier>/<Adresse> si besoin
+    await ensureFolderPath(folderPath);
+
+    await uploadTextToOneDrive(
+      folderPath,
+      `${label}.json`,
+      JSON.stringify(deepClone(data), null, 2)
+    );
+
+    alert("✅ JSON sauvegardé sur OneDrive");
+  } catch (e) {
+    console.error(e);
+    alert("Erreur sauvegarde OneDrive (voir console)");
+  }
+};
+
+const listEdlsFromOneDrive = async () => {
+  if (!odSelected) {
+    alert("Choisis d'abord un sous-dossier de Maintenance (bouton 🔄).");
+    return;
+  }
+  const adresseFolder = slug(data.info.adresse || "Adresse");
+  const folderPath = `${BASE_FOLDER}/${odSelected}/${adresseFolder}`;
+
+  setOdLoading(true);
+  try {
+    const items = await listOneDriveChildren(folderPath);
+    const jsons = items
+      .filter((i) => i.file && i.name && i.name.toLowerCase().endsWith(".json"))
+      .sort((a, b) => (b.lastModifiedDateTime || "").localeCompare(a.lastModifiedDateTime || ""));
+    setOdFiles(jsons);
+    if (!jsons.length) alert("Aucun JSON trouvé dans ce dossier.");
+  } catch (e) {
+    console.error(e);
+    alert("Impossible de lister les JSON (dossier Adresse peut-être absent).");
+  } finally {
+    setOdLoading(false);
+  }
+};
+
+const loadEdlFromOneDrive = async (fileName) => {
+  const adresseFolder = slug(data.info.adresse || "Adresse");
+  const filePath = `${BASE_FOLDER}/${odSelected}/${adresseFolder}/${fileName}`;
+
+  try {
+    const txt = await downloadOneDriveText(filePath);
+    const obj = JSON.parse(txt);
+    setData(obj);
+    setActiveTab("info");
+    alert("✅ EDL chargé depuis OneDrive");
+  } catch (e) {
+    console.error(e);
+    alert("Erreur chargement OneDrive");
+  }
+};
+
 
       const updateInfo = (field, value) => setData(prev => ({ ...prev, info: { ...prev.info, [field]: value } }));
       
@@ -336,9 +552,14 @@
       };
 
       const saveCurrentEdl = () => {
-        setSavedEdls(prev => [...prev, { id: Date.now(), data: deepClone(data), savedAt: new Date().toISOString(), templateKey: currentTemplate }]);
-        alert('État des lieux sauvegardé !');
-      };
+  const label = buildEdlName(data.info);
+  setSavedEdls(prev => [
+    ...prev,
+    { id: Date.now(), label, data: deepClone(data), savedAt: new Date().toISOString(), templateKey: currentTemplate }
+  ]);
+  alert('État des lieux sauvegardé !');
+};
+
 
       const loadEdl = (edl) => { 
         if (!edl || !edl.data) {
@@ -1476,6 +1697,91 @@
           {/* Content */}
           <div className="p-4">
             {activeTab === 'info' && (
+              <>
+              <div className="bg-white rounded-xl p-4 shadow-sm">
+              <h2 className="font-semibold text-lg mb-4">📁 OneDrive (Maintenance)</h2>
+
+  <div className="flex gap-2 mb-3">
+    <button
+      onClick={refreshOneDriveFolders}
+      className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm"
+      disabled={odLoading}
+    >
+      {odLoading ? "..." : "🔄 Charger les sous-dossiers"}
+    </button>
+
+    <button
+      onClick={async () => {
+        const name = prompt("Nom du nouveau sous-dossier dans Maintenance ?");
+        if (!name) return;
+        try {
+          await createOneDriveFolder(BASE_FOLDER, name);
+          await refreshOneDriveFolders();
+          setOdSelected(name);
+        } catch (e) {
+          console.error(e);
+          alert("Création impossible (nom déjà pris ? droits ?)");
+        }
+      }}
+      className="px-3 py-2 bg-green-600 text-white rounded-lg text-sm"
+    >
+      ➕ Nouveau
+    </button>
+  </div>
+
+  <label className="block text-sm font-medium mb-2">Sous-dossier (destination)</label>
+  <select
+    value={odSelected}
+    onChange={(e) => setOdSelected(e.target.value)}
+    className="w-full p-3 border rounded-lg"
+  >
+    <option value="" disabled>— choisir —</option>
+    {odFolders.map((f) => (
+      <option key={f.id} value={f.name}>{f.name}</option>
+    ))}
+  </select>
+
+  <p className="text-xs text-gray-500 mt-2">
+    Chemin : <strong>{BASE_FOLDER}/{odSelected || "…"}/{slug(data.info.adresse || "Adresse")}</strong>
+  </p>
+
+  <div className="grid grid-cols-2 gap-2 mt-3">
+    <button
+      onClick={saveEdlToOneDrive}
+      className="py-3 bg-indigo-600 text-white rounded-lg text-sm"
+      disabled={odLoading}
+    >
+      💾 Sauver OneDrive
+    </button>
+    <button
+      onClick={listEdlsFromOneDrive}
+      className="py-3 bg-gray-800 text-white rounded-lg text-sm"
+      disabled={odLoading}
+    >
+      📂 Lister EDL
+    </button>
+  </div>
+
+  {odFiles.length > 0 && (
+    <div className="mt-3 space-y-2 max-h-48 overflow-auto">
+      {odFiles.map((f) => (
+        <div key={f.id} className="flex items-center justify-between bg-gray-50 p-2 rounded-lg border">
+          <div className="text-xs">
+            <div className="font-medium">{f.name}</div>
+            <div className="text-gray-500">{(f.lastModifiedDateTime || "").replace("T", " ").slice(0, 16)}</div>
+          </div>
+          <button
+            onClick={() => loadEdlFromOneDrive(f.name)}
+            className="px-3 py-1 bg-blue-600 text-white rounded text-sm"
+          >
+            Charger
+          </button>
+        </div>
+      ))}
+    </div>
+  )}
+</div>
+
               <div className="space-y-4">
                 {/* Sauvegardes existantes */}
                 {savedEdls.length > 0 && (
@@ -1531,6 +1837,7 @@
                 </div>
                 <button onClick={resetForm} className="w-full py-3 text-red-600 bg-red-50 rounded-lg">Réinitialiser</button>
               </div>
+              </>
             )}
 
             {activeTab === 'pieces' && (
