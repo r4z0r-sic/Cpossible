@@ -511,7 +511,7 @@
                           <div className="flex flex-wrap gap-1 mb-2">
                             {ETAT_OPTIONS.map(opt => <EtatButton key={opt} value={opt} selected={item.etat === opt} onClick={(v) => updateEtatLieux(pieceKey, item.id, 'etat', v)} />)}
                           </div>
-                          <input type="text" placeholder="Commentaire..." value={item.commentaire} onChange={(e) => updateEtatLieux(pieceKey, item.id, 'commentaire', e.target.value)} className="w-full text-sm p-2 border rounded-lg mb-2" />
+                          <input type="text" placeholder="Commentaire..." defaultValue={item.commentaire} onBlur={(e) => updateEtatLieux(pieceKey, item.id, 'commentaire', e.target.value)} className="w-full text-sm p-2 border rounded-lg mb-2" />
                           <PhotoGallery photos={item.photos} onRemove={(photoId) => updateEtatLieux(pieceKey, item.id, 'photos', item.photos.filter(p => p.id !== photoId))} inputId={`p-e-${pieceKey}-${item.id}`} onAddPhoto={(e) => handlePhotoCapture(e, (photos) => updateEtatLieux(pieceKey, item.id, 'photos', photos), item.photos)} />
                         </div>
                       ))}
@@ -1539,7 +1539,7 @@
                         <span className="text-sm">Rendue:</span>
                         {OUI_NON.map(opt => <button key={opt} onClick={() => updateCle(cle.id, 'rendue', opt)} className={`px-3 py-1 text-sm rounded-lg border ${cle.rendue === opt ? opt === 'Oui' ? 'bg-green-500 text-white' : 'bg-red-500 text-white' : 'bg-white'}`}>{opt}</button>)}
                       </div>
-                      <input type="text" placeholder="Commentaire..." value={cle.commentaire} onChange={(e) => updateCle(cle.id, 'commentaire', e.target.value)} className="w-full text-sm p-2 border rounded-lg mb-2" />
+                      <input type="text" placeholder="Commentaire..." defaultValue={cle.commentaire} onBlur={(e) => updateCle(cle.id, 'commentaire', e.target.value)} className="w-full text-sm p-2 border rounded-lg mb-2" />
                       <PhotoGallery photos={cle.photos} onRemove={(photoId) => updateCle(cle.id, 'photos', cle.photos.filter(p => p.id !== photoId))} inputId={`p-c-${cle.id}`} onAddPhoto={(e) => handlePhotoCapture(e, (photos) => updateCle(cle.id, 'photos', photos), cle.photos)} />
                     </div>
                   ))}
