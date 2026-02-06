@@ -1088,14 +1088,14 @@
                       <h3 className="font-semibold text-green-700 mb-2">📥 Entrée</h3>
                       {entryData ? (
                         <div className="bg-green-50 p-2 rounded">
-                          <p className="text-sm">{entryData.info.appartement} - {entryData.info.date}</p>
+                          <p className="text-sm">{buildEdlName(entryData.info)}</p>
                           <button onClick={() => setEntryData(null)} className="text-xs text-red-500">Retirer</button>
                         </div>
                       ) : (
                         <div className="space-y-1">
                           {savedEdls.filter(e => e.data.info.type === 'entree').map(edl => (
                             <button key={edl.id} onClick={() => setEntryData(edl.data)} className="w-full text-left p-2 bg-gray-50 rounded hover:bg-green-50 text-sm">
-                              {edl.data.info.appartement} - {edl.data.info.date}
+                              {edl.label || buildEdlName(edl.data.info)}
                             </button>
                           ))}
                           {savedEdls.filter(e => e.data.info.type === 'entree').length === 0 && <p className="text-xs text-gray-400">Aucun</p>}
@@ -1106,14 +1106,14 @@
                       <h3 className="font-semibold text-orange-700 mb-2">📤 Sortie</h3>
                       {exitData ? (
                         <div className="bg-orange-50 p-2 rounded">
-                          <p className="text-sm">{exitData.info.appartement} - {exitData.info.date}</p>
+                          <p className="text-sm">{buildEdlName(exitData.info)}</p>
                           <button onClick={() => setExitData(null)} className="text-xs text-red-500">Retirer</button>
                         </div>
                       ) : (
                         <div className="space-y-1">
                           {savedEdls.filter(e => e.data.info.type === 'sortie').map(edl => (
                             <button key={edl.id} onClick={() => setExitData(edl.data)} className="w-full text-left p-2 bg-gray-50 rounded hover:bg-orange-50 text-sm">
-                              {edl.data.info.appartement} - {edl.data.info.date}
+                              {edl.label || buildEdlName(edl.data.info)}
                             </button>
                           ))}
                           {savedEdls.filter(e => e.data.info.type === 'sortie').length === 0 && <p className="text-xs text-gray-400">Aucun</p>}
@@ -1486,7 +1486,7 @@
                         <div key={edl.id} className="flex items-center justify-between bg-white p-2 rounded-lg border">
                           <div className="flex items-center gap-2">
                             <span>{edl.data.info.type === 'entree' ? '📥' : '📤'}</span>
-                            <span className="font-medium text-sm">{edl.data.info.appartement}</span>
+                            <span className="font-medium text-sm">{edl.label || buildEdlName(edl.data.info)}</span>
                             <span className="text-xs text-gray-400">{edl.data.info.date}</span>
                           </div>
                           <button 
@@ -1586,7 +1586,7 @@
                             <div className="flex items-center justify-between mb-2">
                               <div>
                                 <span className="text-lg mr-2">{edl.data.info.type === 'entree' ? '📥' : '📤'}</span>
-                                <span className="font-medium">{edl.data.info.appartement}</span>
+                                <span className="font-medium">{edl.label || buildEdlName(edl.data.info)}</span>
                               </div>
                               <span className="text-xs text-gray-400">{edl.data.info.date}</span>
                             </div>
