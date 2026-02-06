@@ -101,6 +101,28 @@ const buildEdlName = (info) => {
 /* ===================== OneDrive helpers (dossier = Maintenance) ===================== */
 const BASE_FOLDER = "Maintenance";
 
+async function graphJson(path) {
+  const token = await getAccessToken();
+  const res = await fetch(`https://graph.microsoft.com/v1.0${path}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  const txt = await res.text();
+  if (!res.ok) throw new Error(`Graph ${res.status}: ${txt}`);
+  return txt ? JSON.parse(txt) : {};
+}
+
+async function getDriveItemIdByPath(path) {
+  // Exemple path: "Maintenance"
+  const data = await graphJson(`/me/drive/root:/${encodeURI(path)}`);
+  return data.id;
+}
+
+async function listChildrenById(itemId) {
+  const data = await graphJson(`/me/drive/items/${itemId}/children`);
+  return data.value || [];
+}
+
+
 async function listOneDriveChildren(path) {
   const token = await getAccessToken();
   const res = await fetch(
@@ -350,6 +372,8 @@ async function downloadOneDriveText(filePath) {
     const deepClone = (obj) => JSON.parse(JSON.stringify(obj));
 
     function App() {
+      const [maintenanceId, setMaintenanceId] = useState(null);
+
       const [odFolders, setOdFolders] = useState([]);   // sous-dossiers de Maintenance/
       const [odSelected, setOdSelected] = useState(""); // sous-dossier choisi
       const [odLoading, setOdLoading] = useState(false);
@@ -389,16 +413,28 @@ async function downloadOneDriveText(filePath) {
       const refreshOneDriveFolders = async () => {
   setOdLoading(true);
   try {
-    const folders = await listOneDriveFolders(BASE_FOLDER); // "Maintenance"
+    // 1) résoudre Maintenance -> ID (1 fois)
+    let id = maintenanceId;
+    if (!id) {
+      id = await getDriveItemIdByPath("Maintenance");
+      setMaintenanceId(id);
+    }
+
+    // 2) lister les sous-dossiers via ID
+    const items = await listChildrenById(id);
+    const folders = items.filter(i => i.folder);
+
     setOdFolders(folders);
     if (!odSelected && folders.length) setOdSelected(folders[0].name);
+
   } catch (e) {
     console.error(e);
-    alert('Impossible de lister "Maintenance". Vérifie que le dossier existe dans OneDrive (Mes fichiers).');
+    alert(`Impossible de lister "Maintenance" via Graph.\nDétail: ${e.message}`);
   } finally {
     setOdLoading(false);
   }
 };
+
 
 const saveEdlToOneDrive = async () => {
   if (!odSelected) {
