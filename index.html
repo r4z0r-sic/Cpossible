@@ -67,7 +67,7 @@
       nom: 'Appartement standard',
       pieces: {
         entree: {
-          nom: 'entree', ordre: 1,
+          nom: 'Entrée', ordre: 1,
           etatLieux: [
             { id: 'rev_sol', nom: 'Revêtement de sol' },
             { id: 'murs', nom: 'Murs et plafond' },
@@ -139,8 +139,20 @@
             { id: 'seche_linge', nom: 'Sèche-linge', qte: 1 },
           ],
         },
+        wc: {
+          nom: 'WC', ordre: 5,
+          etatLieux: [
+            { id: 'rev_sol', nom: 'Revêtement de sol' },
+            { id: 'murs', nom: 'Murs et plafond' },
+            { id: 'portes', nom: 'Porte(s)' },
+            { id: 'luminaires', nom: 'Luminaire(s)' },
+            { id: 'wc', nom: 'WC' },
+          ],
+          inventaire: [
+          ],
+        },
         chambre: {
-          nom: 'Chambre', ordre: 5,
+          nom: 'Chambre', ordre: 6,
           etatLieux: [
             { id: 'rev_sol', nom: 'Revêtement de sol' },
             { id: 'murs', nom: 'Murs et plafond' },
@@ -160,7 +172,7 @@
           ],
         },
         chauffage: {
-          nom: 'Chauffage / Eau chaude', ordre: 6,
+          nom: 'Chauffage / Eau chaude', ordre: 7,
           etatLieux: [
             { id: 'chaudiere', nom: 'Chaudière' },
             { id: 'ballon', nom: 'Ballon eau chaude' },
