@@ -1800,15 +1800,17 @@ const loadEdlFromOneDrive = async (fileName) => {
 
   <div className="flex gap-2 mb-3">
     <button
-      onClick={refreshOneDriveFolders}
-      className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm"
-      disabled={odLoading}
-    >
+  type="button"
+  onClick={refreshOneDriveFolders}
+  className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm"
+  disabled={odLoading}
+>
       {odLoading ? "..." : "🔄 Charger les sous-dossiers"}
     </button>
 
     <button
-      onClick={async () => {
+  type="button"
+  onClick={async () => {
         const name = prompt("Nom du nouveau sous-dossier dans Maintenance ?");
         if (!name) return;
         try {
@@ -1844,14 +1846,16 @@ const loadEdlFromOneDrive = async (fileName) => {
 
   <div className="grid grid-cols-2 gap-2 mt-3">
     <button
-      onClick={saveEdlToOneDrive}
+  type="button"
+  onClick={saveEdlToOneDrive}
       className="py-3 bg-indigo-600 text-white rounded-lg text-sm"
       disabled={odLoading}
     >
       💾 Sauver OneDrive
     </button>
     <button
-      onClick={listEdlsFromOneDrive}
+  type="button"
+  onClick={listEdlsFromOneDrive}
       className="py-3 bg-gray-800 text-white rounded-lg text-sm"
       disabled={odLoading}
     >
@@ -1868,7 +1872,8 @@ const loadEdlFromOneDrive = async (fileName) => {
             <div className="text-gray-500">{(f.lastModifiedDateTime || "").replace("T", " ").slice(0, 16)}</div>
           </div>
           <button
-            onClick={() => loadEdlFromOneDrive(f.name)}
+  type="button"
+  onClick={() => loadEdlFromOneDrive(f.name)}
             className="px-3 py-1 bg-blue-600 text-white rounded text-sm"
           >
             Charger
