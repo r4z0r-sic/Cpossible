@@ -303,7 +303,7 @@ async function downloadOneDriveText(filePath) {
             { id: 'serrures', nom: 'Serrures et quincailleries' },
             { id: 'interrupteurs', nom: 'Interrupteurs et prises' },
             { id: 'luminaires', nom: 'Luminaires' },
-            { id: 'radiateurs', nom: 'radiateurs' },
+            { id: 'radiateurs', nom: 'Radiateurs' },
           ],
           inventaire: [
             { id: 'detecteur', nom: 'Détecteur de fumée', qte: 1 },
@@ -319,14 +319,15 @@ async function downloadOneDriveText(filePath) {
             { id: 'portes', nom: 'Porte(s)' },
             { id: 'interrupteurs', nom: 'Interrupteurs et prises' },
             { id: 'luminaires', nom: 'Luminaires' },
-            { id: 'radiateurs', nom: 'radiateurs' },
+            { id: 'radiateurs', nom: 'Radiateurs' },
           ],
           inventaire: [
-            { id: 'table_manger', nom: 'Table à manger', qte: 1 },
-            { id: 'chaises', nom: 'Chaises', qte: 4 },
-            { id: 'table_basse', nom: 'Table basse', qte: 1 },
-            { id: 'canape', nom: 'Canapé', qte: 1 },
-            { id: 'meuble_tv', nom: 'Meuble TV', qte: 1 },
+            { id: 'table_manger', nom: 'Table', qte: 0 },
+            { id: 'chaises', nom: 'Chaises', qte: 0 },
+            { id: 'table_basse', nom: 'Table basse', qte: 0 },
+            { id: 'canape', nom: 'Canapé', qte: 0 },
+            { id: 'meuble_tv', nom: 'Meuble TV', qte: 0 },
+            { id: 'bureau', nom: 'Bureau', qte: 0 },
           ],
         },
         cuisine: {
@@ -341,14 +342,16 @@ async function downloadOneDriveText(filePath) {
             { id: 'meubles', nom: 'Meubles de cuisine' },
             { id: 'four', nom: 'Four de cuisson' },
             { id: 'plaques', nom: 'Plaques de cuisson' },
+            { id: 'cuisinière', nom: 'Cuisinière' },
             { id: 'hotte', nom: 'Hotte' },
             { id: 'frigo', nom: 'Réfrigérateur' },
             { id: 'evier', nom: 'Évier' },
             { id: 'robinet', nom: 'Robinet' },
-            { id: 'radiateurs', nom: 'radiateurs' },
+            { id: 'radiateurs', nom: 'Radiateurs' },
           ],
           inventaire: [
-            { id: 'micro_onde', nom: 'Micro-onde', qte: 1 },
+            { id: 'micro_onde', nom: 'Micro-onde', qte: 0 },
+            { id: 'vaisselle', nom: 'Kit Vaisselle', qte: 0 },
           ],
         },
         salle_bain: {
@@ -361,11 +364,9 @@ async function downloadOneDriveText(filePath) {
             { id: 'douche', nom: 'Douche / Baignoire' },
             { id: 'meuble', nom: 'Meuble de SdB' },
             { id: 'lavabo', nom: 'Lavabo' },
-            { id: 'radiateurs', nom: 'radiateurs' },
+            { id: 'radiateurs', nom: 'Radiateurs' },
           ],
-          inventaire: [
-            { id: 'seche_linge', nom: 'Sèche-linge', qte: 1 },
-          ],
+          inventaire: [],
         },
         wc: {
           nom: 'WC', ordre: 5,
@@ -388,15 +389,17 @@ async function downloadOneDriveText(filePath) {
             { id: 'portes', nom: 'Porte(s)' },
             { id: 'luminaires', nom: 'Luminaire(s)' },
             { id: 'interrupteurs', nom: 'Interrupteurs et prises' },
-            { id: 'radiateurs', nom: 'radiateurs' },
+            { id: 'radiateurs', nom: 'Radiateurs' },
           ],
           inventaire: [
-            { id: 'lit', nom: 'Lit', qte: 1 },
-            { id: 'matelas', nom: 'Matelas', qte: 1 },
-            { id: 'couette', nom: 'Couette', qte: 1 },
-            { id: 'bureau', nom: 'Bureau', qte: 1 },
-            { id: 'chaise', nom: 'Chaise', qte: 1 },
-            { id: 'armoire', nom: 'Armoire', qte: 1 },
+            { id: 'lit', nom: 'Lit', qte: 0 },
+            { id: 'matelas', nom: 'Matelas', qte: 0 },
+            { id: 'bureau', nom: 'Bureau', qte: 0 },
+            { id: 'chaise', nom: 'Chaise', qte: 0 },
+            { id: 'armoire', nom: 'Armoire', qte: 0 },
+            { id: 'placard', nom: 'Placard', qte: 0 },
+            { id: 'chevet', nom: 'Table de chevet', qte: 0 },
+            { id: 'meuble_tirroirs', nom: 'Meuble à tirroirs', qte: 0 },
           ],
         },
         chauffage: {
@@ -409,13 +412,13 @@ async function downloadOneDriveText(filePath) {
         },
       },
       cles: [
-        { id: 'badge', nom: 'Badge immeuble', qte: 1 },
-        { id: 'appartement', nom: 'Clé appartement', qte: 2 },
-        { id: 'boite_lettres', nom: 'Clé boîte aux lettres', qte: 1 },
+        { id: 'badge', nom: 'Badge immeuble', qte: 0 },
+        { id: 'appartement', nom: 'Clé appartement', qte: 0 },
+        { id: 'boite_lettres', nom: 'Clé boîte aux lettres', qte: 0 },
       ],
     };
 
-    const templateToData = (template, type = 'sortie') => {
+    const templateToData = (template, type = 'entrée') => {
       const pieces = {};
       Object.entries(template.pieces).forEach(([key, piece]) => {
         pieces[key] = {
