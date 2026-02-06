@@ -71,16 +71,47 @@ const msalInstance = new msal.PublicClientApplication(msalConfig);
 let __msalReady = msalInstance.initialize();
 
 async function getAccessToken() {
-  await __msalReady; // ✅ important
+  let __msalReady = msalInstance.initialize();
+let __msalInteractive = false;
+
+async function getAccessToken() {
+  await __msalReady;
+
+  // Empêche double popup
+  if (__msalInteractive) {
+    throw new Error("interaction_in_progress");
+  }
 
   const accounts = msalInstance.getAllAccounts();
   if (!accounts.length) {
-    await msalInstance.loginPopup(loginRequest);
+    try {
+      __msalInteractive = true;
+      await msalInstance.loginPopup(loginRequest);
+    } finally {
+      __msalInteractive = false;
+    }
   }
 
   const account = msalInstance.getAllAccounts()[0];
-  const res = await msalInstance.acquireTokenSilent({ ...loginRequest, account });
-  return res.accessToken;
+
+  try {
+    const res = await msalInstance.acquireTokenSilent({ ...loginRequest, account });
+    return res.accessToken;
+  } catch (e) {
+    // Si silent impossible (session expirée, etc.), on repasse en popup
+    if (e && (e.errorCode === "interaction_required" || e.errorCode === "login_required" || e.errorCode === "consent_required")) {
+      try {
+        __msalInteractive = true;
+        const res = await msalInstance.acquireTokenPopup({ ...loginRequest });
+        return res.accessToken;
+      } finally {
+        __msalInteractive = false;
+      }
+    }
+    throw e;
+  }
+}
+
 }
 
 
@@ -416,6 +447,7 @@ async function downloadOneDriveText(filePath) {
       useEffect(() => { try { localStorage.setItem('edl_saved', JSON.stringify(savedEdls)); } catch {} }, [savedEdls]);
 
       const refreshOneDriveFolders = async () => {
+        if (odLoading) return;
   setOdLoading(true);
   try {
     // 1) résoudre Maintenance -> ID (1 fois)
