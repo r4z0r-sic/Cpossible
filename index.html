@@ -68,16 +68,21 @@ const loginRequest = {
 };
 
 const msalInstance = new msal.PublicClientApplication(msalConfig);
+let __msalReady = msalInstance.initialize();
 
 async function getAccessToken() {
+  await __msalReady; // ✅ important
+
   const accounts = msalInstance.getAllAccounts();
   if (!accounts.length) {
     await msalInstance.loginPopup(loginRequest);
   }
+
   const account = msalInstance.getAllAccounts()[0];
   const res = await msalInstance.acquireTokenSilent({ ...loginRequest, account });
   return res.accessToken;
 }
+
 
 /* ===================== Utils nommage / slug ===================== */
 const slug = (s) =>
