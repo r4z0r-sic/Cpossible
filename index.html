@@ -66,37 +66,32 @@
     const defaultTemplate = {
       nom: 'Appartement standard',
       pieces: {
-        couloir: {
-          nom: 'Couloir - Buanderie - WC', ordre: 1,
+        entree: {
+          nom: 'entree', ordre: 1,
           etatLieux: [
             { id: 'rev_sol', nom: 'Revêtement de sol' },
-            { id: 'plinthes', nom: 'Plinthes de sol' },
             { id: 'murs', nom: 'Murs et plafond' },
             { id: 'portes', nom: 'Porte(s)' },
             { id: 'serrures', nom: 'Serrures et quincailleries' },
             { id: 'interrupteurs', nom: 'Interrupteurs et prises' },
-            { id: 'luminaires', nom: 'Luminaires de plafond' },
-            { id: 'wc', nom: 'WC + meuble' },
+            { id: 'luminaires', nom: 'Luminaires' },
+            { id: 'radiateurs', nom: 'radiateurs' },
           ],
           inventaire: [
             { id: 'detecteur', nom: 'Détecteur de fumée', qte: 1 },
             { id: 'interphone', nom: 'Interphone', qte: 1 },
-            { id: 'aspirateur', nom: 'Aspirateur', qte: 1 },
-            { id: 'fer', nom: 'Fer et table à repasser', qte: 1 },
-            { id: 'balai', nom: 'Balai', qte: 1 },
-            { id: 'lave_linge', nom: 'Machine à laver le linge', qte: 1 },
           ],
         },
         salon: {
           nom: 'Salon', ordre: 2,
           etatLieux: [
             { id: 'rev_sol', nom: 'Revêtement de sol' },
-            { id: 'plinthes', nom: 'Plinthes de sol' },
             { id: 'murs', nom: 'Murs et plafond' },
             { id: 'fenetre', nom: 'Fenêtre - volet' },
             { id: 'portes', nom: 'Porte(s)' },
             { id: 'interrupteurs', nom: 'Interrupteurs et prises' },
-            { id: 'luminaires', nom: 'Luminaire(s) plafond' },
+            { id: 'luminaires', nom: 'Luminaires' },
+            { id: 'radiateurs', nom: 'radiateurs' },
           ],
           inventaire: [
             { id: 'table_manger', nom: 'Table à manger', qte: 1 },
@@ -104,8 +99,6 @@
             { id: 'table_basse', nom: 'Table basse', qte: 1 },
             { id: 'canape', nom: 'Canapé', qte: 1 },
             { id: 'meuble_tv', nom: 'Meuble TV', qte: 1 },
-            { id: 'tv', nom: 'TV', qte: 1 },
-            { id: 'box', nom: 'Box internet', qte: 1 },
           ],
         },
         cuisine: {
@@ -122,21 +115,12 @@
             { id: 'plaques', nom: 'Plaques de cuisson' },
             { id: 'hotte', nom: 'Hotte' },
             { id: 'frigo', nom: 'Réfrigérateur' },
-            { id: 'lave_vaisselle', nom: 'Lave-vaisselle' },
-            { id: 'evier', nom: 'Évier - robinet' },
+            { id: 'evier', nom: 'Évier' },
+            { id: 'robinet', nom: 'Robinet' },
+            { id: 'radiateurs', nom: 'radiateurs' },
           ],
           inventaire: [
-            { id: 'assiettes', nom: 'Assiettes', qte: 6 },
-            { id: 'verres', nom: 'Verres', qte: 6 },
-            { id: 'tasses', nom: 'Tasses / mug', qte: 6 },
-            { id: 'bols', nom: 'Bols', qte: 6 },
-            { id: 'couverts', nom: 'Set couverts (6 pers)', qte: 1 },
-            { id: 'casseroles', nom: 'Casseroles', qte: 2 },
-            { id: 'poele', nom: 'Poêle', qte: 1 },
-            { id: 'cafetiere', nom: 'Machine à café', qte: 1 },
             { id: 'micro_onde', nom: 'Micro-onde', qte: 1 },
-            { id: 'bouilloire', nom: 'Bouilloire', qte: 1 },
-            { id: 'grille_pain', nom: 'Grille-pain', qte: 1 },
           ],
         },
         salle_bain: {
@@ -149,7 +133,7 @@
             { id: 'douche', nom: 'Douche / Baignoire' },
             { id: 'meuble', nom: 'Meuble de SdB' },
             { id: 'lavabo', nom: 'Lavabo' },
-            { id: 'seche_serviette', nom: 'Sèche-serviette' },
+            { id: 'radiateurs', nom: 'radiateurs' },
           ],
           inventaire: [
             { id: 'seche_linge', nom: 'Sèche-linge', qte: 1 },
@@ -164,12 +148,12 @@
             { id: 'portes', nom: 'Porte(s)' },
             { id: 'luminaires', nom: 'Luminaire(s)' },
             { id: 'interrupteurs', nom: 'Interrupteurs et prises' },
+            { id: 'radiateurs', nom: 'radiateurs' },
           ],
           inventaire: [
             { id: 'lit', nom: 'Lit', qte: 1 },
             { id: 'matelas', nom: 'Matelas', qte: 1 },
             { id: 'couette', nom: 'Couette', qte: 1 },
-            { id: 'oreiller', nom: 'Oreiller', qte: 1 },
             { id: 'bureau', nom: 'Bureau', qte: 1 },
             { id: 'chaise', nom: 'Chaise', qte: 1 },
             { id: 'armoire', nom: 'Armoire', qte: 1 },
@@ -178,7 +162,7 @@
         chauffage: {
           nom: 'Chauffage / Eau chaude', ordre: 6,
           etatLieux: [
-            { id: 'chaudiere', nom: 'Chaudière / Radiateurs' },
+            { id: 'chaudiere', nom: 'Chaudière' },
             { id: 'ballon', nom: 'Ballon eau chaude' },
           ],
           inventaire: [],
