@@ -68,10 +68,9 @@ const loginRequest = {
 };
 
 const msalInstance = new msal.PublicClientApplication(msalConfig);
-let __msalReady = msalInstance.initialize();
 
-async function getAccessToken() {
-  let __msalReady = msalInstance.initialize();
+// init UNE seule fois
+const __msalReady = msalInstance.initialize();
 let __msalInteractive = false;
 
 async function getAccessToken() {
@@ -79,7 +78,7 @@ async function getAccessToken() {
 
   if (__msalInteractive) throw new Error("interaction_in_progress");
 
-  const scopes = loginRequest.scopes; // ["User.Read", "Files.ReadWrite"]
+  const scopes = loginRequest.scopes;
 
   let account = msalInstance.getAllAccounts()[0];
   if (!account) {
@@ -94,52 +93,13 @@ async function getAccessToken() {
 
   try {
     const res = await msalInstance.acquireTokenSilent({ scopes, account });
-    return res.accessToken; // ✅ PAS idToken
+    return res.accessToken;
   } catch (e) {
     const code = e?.errorCode || e?.code || "";
     if (["interaction_required", "login_required", "consent_required"].includes(code)) {
       try {
         __msalInteractive = true;
         const res = await msalInstance.acquireTokenPopup({ scopes });
-        return res.accessToken; // ✅
-      } finally {
-        __msalInteractive = false;
-      }
-    }
-    throw e;
-  }
-}
-
-
-async function getAccessToken() {
-  await __msalReady;
-
-  // Empêche double popup
-  if (__msalInteractive) {
-    throw new Error("interaction_in_progress");
-  }
-
-  const accounts = msalInstance.getAllAccounts();
-  if (!accounts.length) {
-    try {
-      __msalInteractive = true;
-      await msalInstance.loginPopup(loginRequest);
-    } finally {
-      __msalInteractive = false;
-    }
-  }
-
-  const account = msalInstance.getAllAccounts()[0];
-
-  try {
-    const res = await msalInstance.acquireTokenSilent({ ...loginRequest, account });
-    return res.accessToken;
-  } catch (e) {
-    // Si silent impossible (session expirée, etc.), on repasse en popup
-    if (e && (e.errorCode === "interaction_required" || e.errorCode === "login_required" || e.errorCode === "consent_required")) {
-      try {
-        __msalInteractive = true;
-        const res = await msalInstance.acquireTokenPopup({ ...loginRequest });
         return res.accessToken;
       } finally {
         __msalInteractive = false;
@@ -149,7 +109,6 @@ async function getAccessToken() {
   }
 }
 
-}
 
 
 /* ===================== Utils nommage / slug ===================== */
