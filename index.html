@@ -416,6 +416,22 @@
 
       const resetForm = () => { if (window.confirm('Réinitialiser ?')) { setData(templateToData(templates[currentTemplate], data.info.type)); setActiveTab('info'); } };
 
+      const resetTemplates = (alsoDeleteSavedEdls = false) => {
+        const msg = alsoDeleteSavedEdls
+          ? "Réinitialiser les modèles ET supprimer les états des lieux sauvegardés ?"
+          : "Réinitialiser les modèles (modèle par défaut) ?";
+
+          if (!window.confirm(msg)) return;
+
+          try {
+            localStorage.removeItem('edl_templates');
+          if (alsoDeleteSavedEdls) localStorage.removeItem('edl_saved');
+        } catch (e) {}
+
+        window.location.reload();
+      };
+
+
       const countPhotos = () => {
         let total = 0;
         Object.values(data.pieces).forEach(piece => { piece.etatLieux.forEach(item => total += item.photos.length); piece.inventaire.forEach(item => total += item.photos.length); });
@@ -984,13 +1000,13 @@
 
                 {/* ONGLET EXPORT */}
                 {configTab === 'export' && (
-                  <div className="space-y-4">
+                  <div className="space-y-6">
                     <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg text-sm">
                       <p className="font-medium text-blue-800 mb-1">💾 Sauvegarde et transfert</p>
                       <p className="text-blue-700 text-xs">Exportez vos modèles pour les sauvegarder ou les transférer sur un autre appareil.</p>
                     </div>
                     
-                    <div className="space-y-3">
+                    <div className="space-y-5">
                       <button onClick={exportTemplates} className="w-full py-3 bg-purple-600 text-white rounded-lg font-medium">
                         📤 Exporter tous les modèles
                       </button>
@@ -1001,6 +1017,20 @@
                       <hr className="my-2 border-gray-200" />
                       <button onClick={exportJSON} className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium">
                         💾 Exporter l'état des lieux actuel
+                      </button>
+                      <hr className="my-2 border-gray-200" />
+                      <button
+                        onClick={() => resetTemplates(false)}
+                        className="w-full py-3 bg-red-600 text-white rounded-lg font-medium"
+                      >
+                        ♻️ Réinitialiser les modèles (default)
+                      </button>
+
+                      <button
+                        onClick={() => resetTemplates(true)}
+                        className="w-full py-3 bg-red-700 text-white rounded-lg font-medium"
+                      >
+                        🧨 Réinitialiser modèles + supprimer les sauvegardes
                       </button>
                     </div>
                   </div>
