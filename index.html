@@ -45,6 +45,24 @@
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
 
+    /* ===== utils nom de fichier ===== */
+    const slug = (s) =>
+      (s || '')
+        .toString()
+        .trim()
+        .replace(/\s+/g, '_')
+        .replace(/[^\w\-]+/g, '')
+        .replace(/_+/g, '_');
+
+    const buildEdlName = (info) => {
+      const adresse   = slug(info.adresse || 'Adresse');
+      const locataire = slug(info.locataire || 'Locataire');
+      const date      = info.date || new Date().toISOString().slice(0, 10);
+      const type      = info.type === 'entree' ? 'ENTREE' : 'SORTIE';
+    
+      return `${adresse}-${locataire}-${date}-${type}`;
+    };
+
     const Icon = ({ name, size = 20, className = "" }) => {
       const ref = useRef(null);
       useEffect(() => {
@@ -377,7 +395,7 @@
             const element = document.getElementById('print-content');
             await window.html2pdf().set({
               margin: [10, 10, 15, 10], // top, left, bottom, right
-              filename: `edl-${data.info.type}-${data.info.date}.pdf`,
+              filename: `${buildEdlName(data.info)}.pdf`,
               image: { type: 'jpeg', quality: 0.98 },
               html2canvas: { 
                 scale: 2,
@@ -408,7 +426,7 @@
       const exportJSON = () => {
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-        a.download = `edl-${data.info.type}-${data.info.date}.json`; a.click();
+        a.download = `${buildEdlName(data.info)}.json`; a.click();
       };
 
       const exportTemplates = () => {
