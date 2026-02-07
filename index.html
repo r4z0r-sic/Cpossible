@@ -438,6 +438,10 @@ async function downloadOneDriveText(filePath) {
     const deepClone = (obj) => JSON.parse(JSON.stringify(obj));
 
     function App() {
+
+      const [odAddressFolders, setOdAddressFolders] = useState([]);   // dossiers adresses sous Maintenance/<SousDossier>
+      const [odAddressSelected, setOdAddressSelected] = useState(""); // dossier adresse choisi
+
       const [maintenanceId, setMaintenanceId] = useState(null);
 
       const [odFolders, setOdFolders] = useState([]);   // sous-dossiers de Maintenance/
@@ -477,40 +481,86 @@ async function downloadOneDriveText(filePath) {
       useEffect(() => { try { localStorage.setItem('edl_saved', JSON.stringify(savedEdls)); } catch {} }, [savedEdls]);
 
       const refreshOneDriveFolders = async () => {
+        if (odLoading) return;
+        setOdLoading(true);
+
+        try {
+          let id = maintenanceId;
+          if (!id) {
+            id = await getDriveItemIdByPath("Maintenance");
+            setMaintenanceId(id);
+          }
+
+          const items = await listChildrenById(id);
+          const folders = items.filter(i => i.folder);
+
+          setOdFolders(folders);
+          if (!odSelected && folders.length) setOdSelected(folders[0].name);
+
+        } catch (e) {
+          console.error(e);
+          alert(`Impossible de lister "Maintenance" via Graph.\nDétail: ${e.message}`);
+        } finally {
+          setOdLoading(false);
+        }
+      };
+
+      const refreshAddressFolders = async () => {
+  if (!odSelected) {
+    alert("Choisis d'abord un sous-dossier (Maintenance/...).");
+    return;
+  }
+
+  const base = `${BASE_FOLDER}/${odSelected}`; // Maintenance/<SousDossier>
+
   if (odLoading) return;
   setOdLoading(true);
 
   try {
-    let id = maintenanceId;
-    if (!id) {
-      id = await getDriveItemIdByPath("Maintenance");
-      setMaintenanceId(id);
+    const items = await listOneDriveChildren(base);
+    const folders = items
+      .filter(i => i.folder)
+      .map(i => i.name)
+      .sort((a,b) => a.localeCompare(b, 'fr'));
+
+    setOdAddressFolders(folders);
+
+    // Si l'adresse sélectionnée n'existe plus, ou vide, on prend la 1ère
+    if (!folders.includes(odAddressSelected)) {
+      setOdAddressSelected(folders[0] || "");
     }
-
-    const items = await listChildrenById(id);
-    const folders = items.filter(i => i.folder);
-
-    setOdFolders(folders);
-    if (!odSelected && folders.length) setOdSelected(folders[0].name);
-
   } catch (e) {
     console.error(e);
-    alert(`Impossible de lister "Maintenance" via Graph.\nDétail: ${e.message}`);
+    alert("Impossible de lister les dossiers Adresse dans ce sous-dossier.");
   } finally {
     setOdLoading(false);
   }
 };
 
+useEffect(() => {
+  setOdAddressFolders([]);
+  setOdAddressSelected("");
+  if (odSelected) refreshAddressFolders();
+}, [odSelected]);
+
+
 
 
 const saveEdlToOneDrive = async () => {
-  if (!odSelected) {
-    alert("Choisis d'abord un sous-dossier de Maintenance (bouton 🔄).");
+  if (!odSelected) return alert("Choisis un sous-dossier.");
+
+  const adresse = (data.info.adresse || "").trim();
+  if (!adresse) {
+    alert("Renseigne l'adresse avant de sauvegarder (sinon on ne sait pas où ranger).");
     return;
   }
 
+  // Si tu veux imposer aussi le choix du dossier adresse existant :
+  // if (!odAddressSelected) return alert("Choisis un dossier adresse.");
+
+
   const label = buildEdlName(data.info);
-  const adresseFolder = slug(data.info.adresse || "Adresse");
+  const adresseFolder = slug(adresse);
 
   // Maintenance/<SousDossier>/<Adresse>/
   const folderPath = `${BASE_FOLDER}/${odSelected}/${adresseFolder}`;
@@ -525,6 +575,9 @@ const saveEdlToOneDrive = async () => {
       JSON.stringify(deepClone(data), null, 2)
     );
 
+    await refreshAddressFolders();
+    setOdAddressSelected(adresseFolder);
+
     alert("✅ JSON sauvegardé sur OneDrive");
   } catch (e) {
     console.error(e);
@@ -533,32 +586,37 @@ const saveEdlToOneDrive = async () => {
 };
 
 const listEdlsFromOneDrive = async () => {
-  if (!odSelected) {
-    alert("Choisis d'abord un sous-dossier de Maintenance (bouton 🔄).");
-    return;
-  }
-  const adresseFolder = slug(data.info.adresse || "Adresse");
-  const folderPath = `${BASE_FOLDER}/${odSelected}/${adresseFolder}`;
+  if (!odSelected) return alert("Choisis un sous-dossier.");
+  if (!odAddressSelected) return alert("Choisis un dossier adresse.");
 
+  const folderPath = `${BASE_FOLDER}/${odSelected}/${odAddressSelected}`;
+
+  if (odLoading) return;
   setOdLoading(true);
+
   try {
     const items = await listOneDriveChildren(folderPath);
     const jsons = items
-      .filter((i) => i.file && i.name && i.name.toLowerCase().endsWith(".json"))
-      .sort((a, b) => (b.lastModifiedDateTime || "").localeCompare(a.lastModifiedDateTime || ""));
+      .filter(i => i.file && i.name?.toLowerCase().endsWith(".json"))
+      .sort((a,b) => (b.lastModifiedDateTime || "").localeCompare(a.lastModifiedDateTime || ""));
     setOdFiles(jsons);
     if (!jsons.length) alert("Aucun JSON trouvé dans ce dossier.");
   } catch (e) {
     console.error(e);
-    alert("Impossible de lister les JSON (dossier Adresse peut-être absent).");
+    alert("Impossible de lister les JSON dans ce dossier adresse.");
   } finally {
     setOdLoading(false);
   }
 };
 
+
 const loadEdlFromOneDrive = async (fileName) => {
-  const adresseFolder = slug(data.info.adresse || "Adresse");
-  const filePath = `${BASE_FOLDER}/${odSelected}/${adresseFolder}/${fileName}`;
+  if (!odSelected || !odAddressSelected) {
+    alert("Choisis un sous-dossier + un dossier adresse.");
+    return;
+  }
+
+  const filePath = `${BASE_FOLDER}/${odSelected}/${odAddressSelected}/${fileName}`;
 
   try {
     const txt = await downloadOneDriveText(filePath);
@@ -571,6 +629,7 @@ const loadEdlFromOneDrive = async (fileName) => {
     alert("Erreur chargement OneDrive");
   }
 };
+
 
 
       const updateInfo = (field, value) => setData(prev => ({ ...prev, info: { ...prev.info, [field]: value } }));
@@ -1846,9 +1905,34 @@ const loadEdlFromOneDrive = async (fileName) => {
     ))}
   </select>
 
-  <p className="text-xs text-gray-500 mt-2">
-    Chemin : <strong>{BASE_FOLDER}/{odSelected || "…"}/{slug(data.info.adresse || "Adresse")}</strong>
-  </p>
+  <label className="block text-sm font-medium mt-3 mb-2">Adresse (dossier)</label>
+
+<div className="flex gap-2">
+  <select
+    value={odAddressSelected}
+    onChange={(e) => setOdAddressSelected(e.target.value)}
+    className="flex-1 p-3 border rounded-lg"
+  >
+    <option value="">— choisir —</option>
+    {odAddressFolders.map((name) => (
+      <option key={name} value={name}>{name}</option>
+    ))}
+  </select>
+
+  <button
+    type="button"
+    onClick={refreshAddressFolders}
+    className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm"
+    disabled={odLoading}
+  >
+    🔄
+  </button>
+</div>
+
+<p className="text-xs text-gray-500 mt-2">
+  Chemin : <strong>{BASE_FOLDER}/{odSelected || "…"}/{odAddressSelected || "…"}</strong>
+</p>
+
 
   <div className="grid grid-cols-2 gap-2 mt-3">
     <button
