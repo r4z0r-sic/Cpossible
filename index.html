@@ -844,6 +844,13 @@ const loadEdlFromOneDrive = async (fileName) => {
         window.location.reload();
       };
 
+      useEffect(() => {
+        if (showPrint) {
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+      }, [showPrint]);
+
+
 
       const countPhotos = () => {
         let total = 0;
