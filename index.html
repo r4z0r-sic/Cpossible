@@ -514,7 +514,8 @@
       function SignatureCanvas({ value, onChange, height = 90 }) {
         const canvasRef = useRef(null);
         const drawingRef = useRef(false);
-        const saveTimerRef = useRef(null);
+        const rafSaveRef = useRef(null);
+        const pointsRef = useRef([]); // [{x,y}, ...]
 
         const setup = () => {
           const canvas = canvasRef.current;
@@ -535,37 +536,39 @@
           ctx.strokeStyle = "#111827";
         };
 
-        const redraw = () => {
+        const clearCanvas = () => {
           const canvas = canvasRef.current;
           if (!canvas) return;
           const ctx = canvas.getContext("2d");
-
           ctx.clearRect(0, 0, canvas.clientWidth, height);
+        };
+
+        const redraw = () => {
+          setup();
+          clearCanvas();
 
           if (!value) return;
+          const canvas = canvasRef.current;
+          const ctx = canvas.getContext("2d");
 
           const img = new Image();
           img.onload = () => {
-            ctx.clearRect(0, 0, canvas.clientWidth, height);
+            clearCanvas();
             ctx.drawImage(img, 0, 0, canvas.clientWidth, height);
           };
           img.src = value;
         };
 
         useEffect(() => {
-          setup();
           redraw();
-          const onResize = () => {
-            setup();
-            redraw();
-          };
+          const onResize = () => redraw();
           window.addEventListener("resize", onResize);
           return () => window.removeEventListener("resize", onResize);
           // eslint-disable-next-line react-hooks/exhaustive-deps
         }, []);
 
         useEffect(() => {
-          setup();
+          // quand tu charges un EDL, on redessine
           redraw();
           // eslint-disable-next-line react-hooks/exhaustive-deps
         }, [value, height]);
@@ -576,29 +579,79 @@
           return { x: e.clientX - rect.left, y: e.clientY - rect.top };
         };
 
-        const saveNow = () => {
-          const canvas = canvasRef.current;
-          if (!canvas) return;
-          onChange(canvas.toDataURL("image/png"));
+        const scheduleSave = () => {
+          if (rafSaveRef.current) return;
+          rafSaveRef.current = requestAnimationFrame(() => {
+            rafSaveRef.current = null;
+            const canvas = canvasRef.current;
+            if (!canvas) return;
+            onChange(canvas.toDataURL("image/png"));
+          });
+        };
+
+        // Bloquer le scroll pendant le dessin (Android)
+        const preventScroll = (ev) => {
+          if (drawingRef.current) ev.preventDefault();
+        };
+
+        const drawSmooth = (ctx, pts) => {
+          // Dessin lissé par courbes quadratiques
+          if (pts.length < 2) return;
+
+          ctx.beginPath();
+          ctx.moveTo(pts[0].x, pts[0].y);
+
+          for (let i = 1; i < pts.length - 1; i++) {
+            const midX = (pts[i].x + pts[i + 1].x) / 2;
+            const midY = (pts[i].y + pts[i + 1].y) / 2;
+            ctx.quadraticCurveTo(pts[i].x, pts[i].y, midX, midY);
+          }
+
+          const last = pts[pts.length - 1];
+          ctx.lineTo(last.x, last.y);
+          ctx.stroke();
         };
 
         const start = (e) => {
           e.preventDefault();
           e.stopPropagation();
-          drawingRef.current = true;
 
-          // Capture le pointeur (utile pour éviter la perte d’events)
+          drawingRef.current = true;
+          pointsRef.current = [];
+
+          // capture + anti-scroll global
           try {
             canvasRef.current.setPointerCapture(e.pointerId);
           } catch (_) {}
+          window.addEventListener("touchmove", preventScroll, {
+            passive: false,
+          });
+
+          const p = getPos(e);
+          pointsRef.current.push(p);
+
+          // petit point initial (si tap)
+          const ctx = canvasRef.current.getContext("2d");
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 0.5, 0, Math.PI * 2);
+          ctx.fillStyle = "#111827";
+          ctx.fill();
+
+          scheduleSave();
+        };
+
+        const moveOne = (ev) => {
+          const p = getPos(ev);
+          const pts = pointsRef.current;
+          pts.push(p);
 
           const ctx = canvasRef.current.getContext("2d");
-          const { x, y } = getPos(e);
-          ctx.beginPath();
-          ctx.moveTo(x, y);
 
-          // Empêche le scroll de la page pendant la signature (Android)
-          document.body.style.overflow = "hidden";
+          // Dessine seulement le segment “nouveau” lissé (sur une fenêtre glissante)
+          const slice = pts.length > 6 ? pts.slice(-6) : pts;
+          drawSmooth(ctx, slice);
+
+          scheduleSave();
         };
 
         const move = (e) => {
@@ -606,18 +659,13 @@
           e.preventDefault();
           e.stopPropagation();
 
-          const ctx = canvasRef.current.getContext("2d");
-          const { x, y } = getPos(e);
-          ctx.lineTo(x, y);
-          ctx.stroke();
+          // Ultra important sur Chrome/Edge : récupérer les events “coalesced” (plus fluide)
+          const events =
+            typeof e.getCoalescedEvents === "function"
+              ? e.getCoalescedEvents()
+              : [e];
 
-          // Sauvegarde “souvent” pendant le dessin (utile si l’OS annule le geste)
-          if (!saveTimerRef.current) {
-            saveTimerRef.current = setTimeout(() => {
-              saveTimerRef.current = null;
-              saveNow();
-            }, 200);
-          }
+          for (const ev of events) moveOne(ev);
         };
 
         const end = (e) => {
@@ -626,20 +674,18 @@
           e?.stopPropagation?.();
           drawingRef.current = false;
 
-          if (saveTimerRef.current) {
-            clearTimeout(saveTimerRef.current);
-            saveTimerRef.current = null;
-          }
-          saveNow();
+          window.removeEventListener("touchmove", preventScroll, {
+            passive: false,
+          });
 
-          // Restaure le scroll
-          document.body.style.overflow = "";
+          // Sauvegarde finale immédiate
+          const canvas = canvasRef.current;
+          if (canvas) onChange(canvas.toDataURL("image/png"));
         };
 
         const clear = () => {
-          const canvas = canvasRef.current;
-          const ctx = canvas.getContext("2d");
-          ctx.clearRect(0, 0, canvas.clientWidth, height);
+          clearCanvas();
+          pointsRef.current = [];
           onChange("");
         };
 
@@ -652,13 +698,13 @@
                   width: "100%",
                   height: `${height}px`,
                   display: "block",
-                  touchAction: "none", // CRUCIAL pour Android
+                  touchAction: "none", // laisse le canvas gérer les gestes
                 }}
                 onPointerDown={start}
                 onPointerMove={move}
                 onPointerUp={end}
-                onPointerCancel={end} // ✅ important : scroll rapide => cancel
-                onPointerLeave={end} // ✅ si tu sors du canvas
+                onPointerCancel={end} // scroll rapide => cancel => on sauvegarde
+                onPointerLeave={end}
               />
             </div>
 
@@ -3897,7 +3943,7 @@
                           Signature (dessin)
                         </label>
                         <SignatureCanvas
-                          height={70}
+                          height={80}
                           value={data.signatures.locataire?.image || ""}
                           onChange={(img) =>
                             updateSignature("locataire", "image", img)
@@ -3927,7 +3973,7 @@
                           Signature (dessin)
                         </label>
                         <SignatureCanvas
-                          height={70}
+                          height={80}
                           value={data.signatures.proprietaire?.image || ""}
                           onChange={(img) =>
                             updateSignature("proprietaire", "image", img)
