@@ -511,87 +511,145 @@
 
       const deepClone = (obj) => JSON.parse(JSON.stringify(obj));
 
-      function SignatureCanvas({ value, onChange, width = 320, height = 120 }) {
+      function SignatureCanvas({ value, onChange, height = 90 }) {
         const canvasRef = useRef(null);
-        const drawing = useRef(false);
+        const drawingRef = useRef(false);
+        const lastRef = useRef({ x: 0, y: 0 });
 
-        // Redessine l'image si déjà stockée (rechargement, retour onglet, etc.)
-        useEffect(() => {
+        // Initialise canvas à la bonne taille (responsive + retina)
+        const resizeCanvas = () => {
           const canvas = canvasRef.current;
           if (!canvas) return;
+
+          const cssWidth = canvas.clientWidth;
+          const cssHeight = height;
+
+          const dpr = window.devicePixelRatio || 1;
+          canvas.width = Math.round(cssWidth * dpr);
+          canvas.height = Math.round(cssHeight * dpr);
+
           const ctx = canvas.getContext("2d");
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // coordonnées en CSS pixels
           ctx.lineWidth = 2;
           ctx.lineCap = "round";
           ctx.lineJoin = "round";
+          ctx.strokeStyle = "#111827"; // gris/noir
+        };
 
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // Redessine l'image si déjà stockée
+        const redrawFromValue = () => {
+          const canvas = canvasRef.current;
+          if (!canvas) return;
+          const ctx = canvas.getContext("2d");
+
+          // clear
+          ctx.clearRect(0, 0, canvas.clientWidth, height);
+
           if (!value) return;
 
           const img = new Image();
           img.onload = () => {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            ctx.clearRect(0, 0, canvas.clientWidth, height);
+            ctx.drawImage(img, 0, 0, canvas.clientWidth, height);
           };
           img.src = value;
-        }, [value]);
+        };
+
+        useEffect(() => {
+          resizeCanvas();
+          redrawFromValue();
+          // resize window
+          const onResize = () => {
+            const prev = value;
+            resizeCanvas();
+            // on redessine l'image existante
+            if (prev) redrawFromValue();
+          };
+          window.addEventListener("resize", onResize);
+          return () => window.removeEventListener("resize", onResize);
+          // eslint-disable-next-line react-hooks/exhaustive-deps
+        }, []);
+
+        // si value change (chargement EDL), on redessine
+        useEffect(() => {
+          resizeCanvas();
+          redrawFromValue();
+          // eslint-disable-next-line react-hooks/exhaustive-deps
+        }, [value, height]);
 
         const getPos = (e) => {
-          const rect = canvasRef.current.getBoundingClientRect();
-          if (e.touches && e.touches[0]) {
-            return {
-              x: e.touches[0].clientX - rect.left,
-              y: e.touches[0].clientY - rect.top,
-            };
-          }
-          return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+          const canvas = canvasRef.current;
+          const rect = canvas.getBoundingClientRect();
+          return {
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top,
+          };
         };
 
         const start = (e) => {
           e.preventDefault();
-          drawing.current = true;
-          const ctx = canvasRef.current.getContext("2d");
-          const { x, y } = getPos(e);
+          const canvas = canvasRef.current;
+          canvas.setPointerCapture?.(e.pointerId);
+
+          drawingRef.current = true;
+          const pos = getPos(e);
+          lastRef.current = pos;
+
+          const ctx = canvas.getContext("2d");
           ctx.beginPath();
-          ctx.moveTo(x, y);
+          ctx.moveTo(pos.x, pos.y);
         };
 
         const move = (e) => {
-          if (!drawing.current) return;
+          if (!drawingRef.current) return;
           e.preventDefault();
-          const ctx = canvasRef.current.getContext("2d");
-          const { x, y } = getPos(e);
-          ctx.lineTo(x, y);
+          const canvas = canvasRef.current;
+
+          const pos = getPos(e);
+          const ctx = canvas.getContext("2d");
+          ctx.lineTo(pos.x, pos.y);
           ctx.stroke();
+
+          lastRef.current = pos;
         };
 
-        const end = () => {
-          if (!drawing.current) return;
-          drawing.current = false;
-          onChange(canvasRef.current.toDataURL("image/png"));
+        const end = (e) => {
+          if (!drawingRef.current) return;
+          e.preventDefault();
+          drawingRef.current = false;
+
+          // Sauvegarde en base64 (image à réutiliser dans aperçu/pdf)
+          const canvas = canvasRef.current;
+          onChange(canvas.toDataURL("image/png"));
         };
 
         const clear = () => {
           const canvas = canvasRef.current;
           const ctx = canvas.getContext("2d");
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.clearRect(0, 0, canvas.clientWidth, height);
           onChange("");
         };
 
         return (
           <div className="space-y-2">
-            <canvas
-              ref={canvasRef}
-              width={width}
-              height={height}
-              className="w-full border rounded-lg bg-white touch-none"
-              onMouseDown={start}
-              onMouseMove={move}
-              onMouseUp={end}
-              onMouseLeave={end}
-              onTouchStart={start}
-              onTouchMove={move}
-              onTouchEnd={end}
-            />
+            <div className="border rounded-lg bg-white overflow-hidden">
+              <canvas
+                ref={canvasRef}
+                // IMPORTANT : on contrôle la hauteur en CSS, pas via attribut height
+                style={{
+                  width: "100%",
+                  height: `${height}px`,
+                  touchAction: "none",
+                  display: "block",
+                }}
+                onPointerDown={start}
+                onPointerMove={move}
+                onPointerUp={end}
+                onPointerCancel={end}
+                onPointerLeave={end}
+              />
+            </div>
+
             <button
               type="button"
               onClick={clear}
@@ -3827,6 +3885,7 @@
                           Signature (dessin)
                         </label>
                         <SignatureCanvas
+                          height={80}
                           value={data.signatures.locataire?.image || ""}
                           onChange={(img) =>
                             updateSignature("locataire", "image", img)
@@ -3856,6 +3915,7 @@
                           Signature (dessin)
                         </label>
                         <SignatureCanvas
+                          height={80}
                           value={data.signatures.proprietaire?.image || ""}
                           onChange={(img) =>
                             updateSignature("proprietaire", "image", img)
