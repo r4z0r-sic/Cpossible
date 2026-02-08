@@ -681,19 +681,30 @@
           for (const ev of events) moveOne(ev);
         };
 
-        const end = (e) => {
+        const end = (e, opts = {}) => {
           if (!drawingRef.current) return;
           e?.preventDefault?.();
           e?.stopPropagation?.();
-          drawingRef.current = false;
 
-          window.removeEventListener("touchmove", preventScroll, {
-            passive: false,
-          });
+          drawingRef.current = false;
 
           // Sauvegarde finale immédiate
           const canvas = canvasRef.current;
           if (canvas) onChange(canvas.toDataURL("image/png"));
+
+          // ✅ Sur Android: pointercancel = souvent scroll en cours.
+          // On retarde la levée du "no scroll" pour éviter le reset/reflow qui flingue l'affichage.
+          if (opts.isCancel) {
+            setTimeout(() => {
+              window.removeEventListener("touchmove", preventScroll, {
+                passive: false,
+              });
+            }, 150);
+          } else {
+            window.removeEventListener("touchmove", preventScroll, {
+              passive: false,
+            });
+          }
         };
 
         const clear = () => {
@@ -716,7 +727,7 @@
                 onPointerDown={start}
                 onPointerMove={move}
                 onPointerUp={end}
-                onPointerCancel={end} // scroll rapide => cancel => on sauvegarde
+                onPointerCancel={(e) => end(e, { isCancel: true })} // scroll rapide => cancel => on sauvegarde
               />
             </div>
 
