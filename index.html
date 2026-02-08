@@ -545,11 +545,10 @@
 
         const redraw = () => {
           if (drawingRef.current) return;
-
-          setup();
-          clearCanvas();
-
-          if (!value) return;
+          if (!value) {
+            clearCanvas();
+            return;
+          }
 
           const canvas = canvasRef.current;
           const ctx = canvas.getContext("2d");
@@ -564,8 +563,14 @@
         };
 
         useEffect(() => {
+          setup();
           redraw();
-          const onResize = () => redraw();
+
+          const onResize = () => {
+            setup();
+            redraw();
+          };
+
           window.addEventListener("resize", onResize);
           return () => window.removeEventListener("resize", onResize);
           // eslint-disable-next-line react-hooks/exhaustive-deps
