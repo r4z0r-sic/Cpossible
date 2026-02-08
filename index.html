@@ -544,15 +544,19 @@
         };
 
         const redraw = () => {
+          if (drawingRef.current) return;
+
           setup();
           clearCanvas();
 
           if (!value) return;
+
           const canvas = canvasRef.current;
           const ctx = canvas.getContext("2d");
 
           const img = new Image();
           img.onload = () => {
+            if (drawingRef.current) return;
             clearCanvas();
             ctx.drawImage(img, 0, 0, canvas.clientWidth, height);
           };
@@ -568,7 +572,11 @@
         }, []);
 
         useEffect(() => {
-          // quand tu charges un EDL, on redessine
+          // ⚠️ IMPORTANT :
+          // ne jamais redessiner depuis value pendant qu’on dessine,
+          // sinon le canvas est reset => dessin effacé instantanément
+          if (drawingRef.current) return;
+
           redraw();
           // eslint-disable-next-line react-hooks/exhaustive-deps
         }, [value, height]);
